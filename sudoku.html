@@ -1,0 +1,572 @@
+<!doctype html>
+
+<html>
+
+<head>
+
+	<title>Sudoku Fun!</title>
+	
+	<style>
+		
+		.container {
+		    margin-left: auto;
+		    margin-right: auto;
+		    padding-left: 15px;
+		    padding-right: 15px;
+		}
+		
+		.sudoku-container {
+			width: auto;
+		}
+		
+		input.sudoku-entry {
+			height: inherit;
+			font-size: 1vw;
+			text-align: center;
+			border: 2px solid black;
+			border-right: none;
+		}
+		
+		input.sudoku-entry:last-child {
+			border-right: 2px solid black;
+		}
+		
+		.button-group{
+			margin-bottom: 10px;
+		}
+		
+		.btn + .btn {
+			margin-left: 10px;
+		}
+		
+		.btn {
+		    -moz-user-select: none;
+		    background-image: none;
+		    border: 1px solid transparent;
+		    border-radius: 4px;
+		    cursor: pointer;
+		    display: inline-block;
+		    font-size: 14px;
+		    font-weight: 400;
+		    line-height: 1.42857;
+		    margin-bottom: 0;
+		    padding: 6px 12px;
+		    text-align: center;
+		    vertical-align: middle;
+		    white-space: nowrap;
+		}
+
+		.btn-new {
+		 	background-color: #FFFFFF;
+    		border-color: #CCCCCC;
+    		color: #333333;
+		}
+
+		.btn-new:hover {
+		 	background-color: #EBEBEB;
+    		border-color: #ADADAD;
+    		color: #333333;
+		}
+						
+		.btn-clear {
+ 			background-color: #D9534F;
+    		border-color: #D43F3A;
+    		color: #FFFFFF;
+		}
+		
+		.btn-clear:hover{
+ 			background-color: #D2322D;
+    		border-color: #AC2925;
+    		color: #FFFFFF;	
+		}
+
+		.error {
+    		color: #D9534F !important;
+		}
+		
+		.btn-success {
+ 			background-color: #5CB85C;
+    		border-color: #4CAE4C;
+    		color: #FFFFFF;
+		}
+		
+		.btn-success:hover{
+ 			background-color: #47A447;
+    		border-color: #398439;
+    		color: #FFFFFF;	
+		}
+				
+	</style>
+	
+</head>
+
+<body>
+	
+	<div class="container">
+		
+		<h1>Sudoku Puzzle</h1>
+				
+		<div id="sudoku"></div>
+		
+	</div>
+		
+	<script src="http://code.jquery.com/jquery-1.11.0.min.js"></script>
+	
+	<script>
+	
+	;( function( $, window, document, undefined ) {
+		'use strict';
+		
+		// Create the defaults
+		var pluginName = 'sudoku',
+			defaults = {
+				size: 540,
+				difficulty: 1, // Range 1-5 default is 1 which is easy mode
+				showDebug: false
+			};
+	
+		// Plugin constructor
+		function Sudoku( element, options ) {
+			
+			this.element = element;
+			this.$el = $( element );
+			this.options = $.extend( {}, defaults, options );
+			this._defaults = defaults;
+			this._name = pluginName;
+			this._debug = [];
+			this._puzzle = new Array(81);
+			this.init();
+			
+		}
+		
+		Sudoku.prototype = {
+			
+			init: function() {
+				
+				var self = this;
+				
+				this._getDebug().push( "Initializing plugin: " + this._name );
+				
+				this._generateLayout();
+				
+				$( '#new-game' ).on( "click.sudoku", function( e ){
+					
+					self._getDebug().push( "Clicked: Creating a new game" );
+					
+					self._generatePuzzle( self._getPuzzle() );
+					
+					self._postPuzzle( self._maskPuzzle() );
+					
+					self._reset();
+					
+					return
+					
+				});
+
+				$( '#check-game' ).on( "click.sudoku", function( e ){
+					
+					self._getDebug().push( "Processing is puzzle solved" );
+					
+					if( self._isSolved() ){
+						
+						$( '#solving-indicator' ).html( "Successfully completed the puzzle!" );
+						
+					} else {
+						
+						$( '#solving-indicator' ).html( "Error in the puzzle solution!" );
+						
+					}
+					
+					return
+					
+				});
+
+				$( 'input.sudoku-entry' ).on( "change.sudoku", function( e ){
+					
+					var $objectSelf = $( this ),
+						currentValue = $objectSelf.val();
+					
+					if( currentValue != "" && currentValue != " " ){
+						
+						if( isNaN( parseFloat( currentValue) ) || parseInt( currentValue ) < 1 || parseInt( currentValue ) > 9 ){
+							
+							$( '#solving-indicator' ).html( "Invalid data entered into cell" );
+							$objectSelf.addClass( "error" );
+							
+						} else {
+							
+							self._getDebug().push( "Input has been entered" );
+							
+							if( $objectSelf.hasClass( "error" ) ){
+								$objectSelf.removeClass( "error" );
+							}
+							
+							if( !self._doesPuzzleHaveEmpties() ){
+								
+								$( '#check-game' ).trigger( "click" );
+								
+							}
+						
+						}
+						
+					}
+					
+					return
+					
+				});
+				
+				$( '#show-solution' ).on( "click.sudoku", function( e ){
+					
+					self._getDebug().push( "Clicked: Showing solution to the game" );
+					
+					if( self._getPuzzle().length != 0 ){
+						
+						self._postPuzzle( self._getPuzzle(), true );
+						
+					}
+					
+					return
+					
+				});
+
+				$( '#debug-game' ).on( "click.sudoku", function( e ){
+					
+					self._getDebug().push( "Clicked: Showing debug to the game" );
+					
+					var objectSelf = $( this ),
+						debug = "<ul>",
+						debugArray = self._getDebug();
+					
+					$.each( debugArray, function( index ){
+						
+						debug += "<li>" + debugArray[ index ] + "</li>";
+						
+					})
+										
+					debug += "</ul>";
+					
+					$( debug ).insertAfter( '.sudoku-container' );
+					
+					self._resetDebug();
+					
+					return 
+					
+				});
+				
+				$( '#new-game' ).trigger( "click" );
+				
+				if( this.options.showDebug ){					
+					$( document ).on( "click", $( '#debug-game' ).click() );					
+				}
+				
+				return
+				
+			},
+
+			_reset: function(){
+				
+				this._getDebug().push( "METHOD: Resetting puzzle settings" );
+				$( '#solving-indicator' ).html( "" );
+				
+				return
+				
+			},
+
+			_doesPuzzleHaveEmpties: function(){
+
+				var emptySet = $.grep( $( 'input.sudoku-entry' ), function( element ) {
+		   			return $(element).val() == "";		    
+				});
+				
+				return emptySet.length > 0
+				
+			},
+			
+			_getDebug: function(){
+				return this._debug;	
+			},
+
+			_resetDebug: function(){
+				this._debug = [];	
+			},
+			
+			_getPuzzle: function(){
+				return this._puzzle;	
+			},
+			
+			_setPuzzle: function( puzzle ){
+				this._puzzle = puzzle;
+			},
+
+			_diffPuzzle: function( puzzle ){
+				
+				this._getDebug().push( "METHOD: Checking difference between solution puzzle and input puzzle" );
+				
+				var currentPuzzle = this._puzzleToArray(),
+					uniqueToSolution = 
+					
+						$.grep( puzzle, function( element, index ) {
+					
+				   			return element != currentPuzzle[ index ];
+				    
+						});
+				
+				return uniqueToSolution.length
+				
+			},
+			
+			_isSolved: function(){
+				
+				this._getDebug().push( "METHOD: IS SOLVED" );
+				
+				return this._diffPuzzle( this._getPuzzle() ) == 0
+			},
+			
+			_puzzleToArray: function(){
+				
+				var sudokuRow = $( '.sudoku-row' ),
+					currentPuzzle = [];
+				
+				$.each( sudokuRow, function( rowIndex, rowObject ){
+
+					var entries = $( rowObject ).find( '.sudoku-entry' );
+					
+					$.each( entries, function( entryIndex, entryObject ){
+												
+						currentPuzzle.push( $( entryObject ).val() );
+
+					});
+
+				});
+				
+				this._getDebug().push( "METHOD: Transforming current inputs to array" );
+				
+				return currentPuzzle;
+				
+			},
+			
+			_postPuzzle: function( puzzle, solution ){
+				
+				var sudokuRow = $( '.sudoku-row' );
+				
+				$.each( sudokuRow, function( rowIndex, rowObject ){
+					
+					var entries = $( rowObject ).find( '.sudoku-entry' ),
+						entryArray = puzzle.splice( 0, 9 );
+					
+					$.each( entries, function( entryIndex, entryObject ){
+						
+						$( entryObject ).val( entryArray[ entryIndex ] );
+						
+						if( solution ){
+							
+							$( entryObject ).css( "color", "red" );
+							
+						}
+						
+					});
+
+				});
+
+				this._getDebug().push( "METHOD: Posting puzzle" );
+				
+				return
+				
+			},
+			
+			_maskPuzzle: function(){
+
+				var mask = new Array( 81 ),
+					puzzleCopy = this._getPuzzle().slice();
+				
+				// Default: For each 3x3 subsquare, pick 5 random cells
+				// and mask them.				
+				for (var i = 0; i < 3; i++) {
+					
+					for (var j = 0; j < 3; j++) {
+						
+						for ( var k = 0; k < 5; k++ ) {
+							var c;
+							
+							do {								
+								c = Math.floor(Math.random() * 9);
+							}
+							
+							while( puzzleCopy[ ( i * 3 + Math.floor(c / 3) ) * 9 + j * 3 + c % 3] == 0);
+
+							puzzleCopy[ ( i * 3 + Math.floor(c / 3) ) * 9 + j * 3 + c % 3 ] = "";
+							
+						}
+						
+					}
+					
+				}
+				
+				this._getDebug().push( "METHOD: Masking puzzle" );
+				
+				return puzzleCopy
+				
+			},
+			
+			_generateLayout: function(){
+				
+				this._getDebug().push( "METHOD: Generate grid with size: " + this.options.size + " x " + this.options.size );
+				
+				var $container = $( "<div class='sudoku-container'><p id='solving-indicator'></p>" ),
+					$buttons = $( "<div class='button-group'><button id='new-game' class='btn btn-new'>New Puzzle</button><button id='check-game' class='btn btn-success'>Check Solution</button><button id='show-solution' class='btn btn-clear'>Show Solution</button><button id='debug-game' class='btn btn-new'>Show Debug</button></div>" ),
+					$row = $( "<div class='sudoku-row'>" +
+								"<input class='sudoku-entry' type='text' maxlength='1'>" +
+								"<input class='sudoku-entry' type='text' maxlength='1'>" +
+								"<input class='sudoku-entry' type='text' maxlength='1'>" +
+								"<input class='sudoku-entry' type='text' maxlength='1'>" +
+								"<input class='sudoku-entry' type='text' maxlength='1'>" +
+								"<input class='sudoku-entry' type='text' maxlength='1'>" +
+								"<input class='sudoku-entry' type='text' maxlength='1'>" +
+								"<input class='sudoku-entry' type='text' maxlength='1'>" +
+								"<input class='sudoku-entry' type='text' maxlength='1'>" +
+							  "</div>" );
+				
+				$container.css({ height: this.options.size, width: this.options.size });
+				$row.css({ height: this.options.size / 10 });
+				$row.find( 'input' ).css({ width: this.options.size / 10 });
+				
+				for( var rowIndex = 0; rowIndex < 9; rowIndex++ ){
+					
+					$container.append( $row.attr( "id", rowIndex ).clone() );
+					
+				}
+				
+				this.$el.append( $container.prepend( $buttons ) );
+				
+				this._getDebug().push( "METHOD: Generating puzzle layout" );
+				
+				return
+				
+			},
+			
+			_generatePuzzle: function( puzzle ){
+
+				for (var i = 0; i < 9; i++)
+					for (var j = 0; j < 9; j++)
+						puzzle[i * 9 + j] = (i*3 + Math.floor(i/3) + j) % 9 + 1;
+
+				// randomly shuffle the numbers in the root sudoku. pick two
+				// numbers n1 and n2 at random. scan the board and for each
+				// occurence of n1, replace it with n2 and vice-versa. repeat
+				// several times.				
+				var switches = 27;
+					
+				for(var i = 0; i < switches; i++) {
+					var n1 = Math.ceil(Math.random() * 9);
+					var n2;
+					do {
+						n2 = Math.ceil(Math.random() * 9);
+					}
+					while(n1 == n2);
+
+					for(var row = 0; row < 9; row++) {
+						for(var col = 0; col < col; k++) {
+							if(puzzle[row * 9 + col] == n1)
+								puzzle[row * 9 + col] = n2;
+							else if(puzzle[row * 9 + col] == n2)
+								puzzle[row * 9 + col] = n1;
+						}
+					}
+				}
+
+				for (var c = 0; c < switches; c++) {
+					var s1 = Math.floor(Math.random() * 3);
+					var s2 = Math.floor(Math.random() * 3);
+
+					for(var row = 0; row < 9; row++) {
+						var tmp = puzzle[row * 9 + (s1 * 3 + c % 3)];
+						puzzle[row * 9 + (s1 * 3 + c % 3)] = puzzle[row * 9 + (s2 * 3 + c % 3)];
+						puzzle[row * 9 + (s2 * 3 + c % 3)] = tmp;
+					}
+				}
+
+				for (var s = 0; s < switches; s++) {
+					var c1 = Math.floor(Math.random() * 3);
+					var c2 = Math.floor(Math.random() * 3);
+
+					for(var row = 0; row < 9; row++) {
+						var tmp = puzzle[row * 9 + (s % 3 * 3 + c1)];
+						puzzle[row * 9 + (s % 3 * 3 + c1)] = puzzle[row * 9 + (s % 3 * 3 + c2)];
+						puzzle[row * 9 + (s % 3 * 3 + c2)] = tmp;
+					}
+				}
+
+				for (var s = 0; s < switches; s++) {
+					var r1 = Math.floor(Math.random() * 3);
+					var r2 = Math.floor(Math.random() * 3);
+
+					for(var col = 0; col < 9; col++)
+					{
+						var tmp = puzzle[(s % 3 * 3 + r1) * 9 + col];
+						puzzle[(s % 3 * 3 + r1) * 9 + col] = puzzle[(s % 3 * 3 + r2) * 9 + col];
+						puzzle[(s % 3 * 3 + r2) * 9 + col] = tmp;
+					}
+				}
+				
+				// Store solution puzzle for later usage
+				this._setPuzzle( puzzle );
+				
+				this._getDebug().push( "METHOD: Generating puzzle with transformations with number of transposes set to: " + switches );
+				
+				return
+			}
+			
+		};
+	
+		// Plugin wrapper around the constructor,
+		// preventing against multiple instantiations
+		$.fn[ pluginName ] = function( option ) {
+			
+			var args = arguments, result;
+	
+			this.each( function() {
+				
+				var $this = $(this), 
+					data = $.data( this, 'plugin_' + pluginName ),
+					options = typeof option === 'object' && option;
+			
+				if (!data) {
+					
+					$this.data('plugin_' + pluginName, ( data = new Sudoku( this, options ) ) );
+					
+				}
+				
+				if (typeof option === 'string') {
+					
+					result = data[ option ].apply( data, Array.prototype.slice.call( args, 1 ) );
+					
+				}
+				
+			});
+	
+			// To enable plugin returns values
+		    return result || this;
+		};
+
+	})( jQuery, window, document );		
+	
+	</script>
+	
+	<script>
+		
+		$( function() {
+			
+			var puzzleOptions = {
+				size: 540
+			};
+			
+			/* Sudoku Game Init */
+			$( '#sudoku' ).sudoku( puzzleOptions );
+			
+		});
+	
+	</script>
+	
+</body>
+
+</html>
